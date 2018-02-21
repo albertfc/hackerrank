@@ -28,24 +28,25 @@ struct Vertex {
 	list<Vertex*> adj; // adjacency list
 	uint32_t id;
 	uint32_t order; // visited order
-	uint32_t heigth;
 	uint32_t color;
 	uint32_t total_sum;
 	uint32_t size;  // number of descendents
 	map<uint32_t,uint32_t> sum; // sum of each adjacent node indexed by id
+	Vertex * cv; // closest vertex with same color in the path to root
 };
 
-void first_step( Vertex * v, const Vertex * prev_v, uint32_t & curr_order, uint32_t curr_heigth, vector<set<uint32_t>> & c, vector<Vertex*> & o ) {
+void first_step( Vertex * v, const Vertex * prev_v, uint32_t & curr_order, vector<set<uint32_t>> & c, vector<Vertex*> & o, vector<Vertex*> & l  ) {
 
 	v->order  = curr_order++;
 	o[v->order] = v;
-	v->heigth = curr_heigth++;
+	v->cv = l[v->color];
 
 	for( Vertex * next_v : v->adj ) {
 		if( next_v == prev_v ) // parent 
 			continue;
 
-		first_step( next_v, v, curr_order, curr_heigth, c, o );
+		l[v->color] = v;
+		first_step( next_v, v, curr_order, c, o,l );
 		v->size += next_v->size;
 
 		// add child sum
@@ -66,6 +67,7 @@ void first_step( Vertex * v, const Vertex * prev_v, uint32_t & curr_order, uint3
 	v->size++; // increase size
 	v->total_sum++; // self connection
 	c[v->color].insert( v->order ); // index v by color
+	l[v->color] = v->cv; // Restore last vertex
 }
 
 
@@ -91,27 +93,20 @@ void second_step( Vertex * v0, const uint32_t n, vector<set<uint32_t>> & c, vect
 				// Find lowest ancestor with same color
 				uint32_t next_o = 0;
 				uint32_t last_o = n;
-				auto it = c[v->color].find( v->order );
-				do {
-					const Vertex * oi = o[*it];
-					if( oi == v ) // self
-						continue;
-					if( oi->order < v->order
-					 && oi->order + oi->size > v->order ) { // found
-						for( Vertex * next_oi: oi->adj ) { // search edge connecting to v
-							if(( next_oi->order > oi->order ) // skip parent
-							&& ( next_oi->order <= v->order ) // v->order must be in the range of next_oi->order and next_oi->order + next_oi->size
-							&& ( v->order < next_oi->order + next_oi->size) ) {
-								v->sum[next_v->id] -= n - next_oi->size;
-								next_o = next_oi->order;
-								last_o = next_oi->order + next_oi->size;
-								break;
-							}
+				if( v->cv ) { // found
+					for( Vertex * next_oi: v->cv->adj ) { // search edge connecting to v
+						if(( next_oi->order > v->cv->order ) // skip parent
+						&& ( next_oi->order <= v->order ) // v->order must be in the range of next_oi->order and next_oi->order + next_oi->size
+						&& ( v->order < next_oi->order + next_oi->size) ) {
+							v->sum[next_v->id] -= n - next_oi->size;
+							next_o = next_oi->order;
+							last_o = next_oi->order + next_oi->size;
+							break;
 						}
-						break;
 					}
-				} while( it-- != c[v->color].begin() );
+				}
 				// search for duplicate colors in lowest ancestor subtree
+				set<uint32_t>::iterator it;
 				while( (it = c[v->color].lower_bound( next_o )) != c[v->color].end()
 				    && o[*it]->order < last_o ) {
 					const Vertex * oi = o[*it];
@@ -134,8 +129,10 @@ void unique_colors( vector<Vertex> & v, size_t color_size ) {
 	vector<Vertex*> o( v.size() );
 	// vertices order visited so far indexed by its color;
 	vector<set<uint32_t>> c( color_size );
+	// last vertex in the path to root by color
+	vector<Vertex*> l( color_size, nullptr );
 	uint32_t order = 0;
-	first_step( &v[0], nullptr, order, 0, c, o );
+	first_step( &v[0], nullptr, order, c, o, l );
 	second_step( &v[0], v.size(), c, o );
 }
 
