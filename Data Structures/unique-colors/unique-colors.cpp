@@ -31,33 +31,38 @@ struct Vertex {
 	uint32_t color;
 	uint32_t total_sum;
 	uint32_t size;  // number of descendents
+	map<uint32_t,uint32_t> cst;  // total size of subtrees with root of the same color
 	map<uint32_t,uint32_t> sum; // sum of each adjacent node indexed by id
 	Vertex * cv; // closest vertex with same color in the path to root
 };
 
-void first_step( Vertex * v, const Vertex * prev_v, uint32_t & curr_order, vector<set<uint32_t>> & c, vector<Vertex*> & o, vector<Vertex*> & l  ) {
+void dfs( Vertex * v, const Vertex * prev_v, uint32_t & curr_order, vector<set<uint32_t>> & c, vector<Vertex*> & o, vector<Vertex*> & l, vector<uint32_t> & s ) {
 
 	v->order  = curr_order++;
 	o[v->order] = v;
 	v->cv = l[v->color];
 
+	uint32_t cst = 0;
 	for( Vertex * next_v : v->adj ) {
 		if( next_v == prev_v ) // parent 
 			continue;
 
 		l[v->color] = v;
-		first_step( next_v, v, curr_order, c, o,l );
+		dfs( next_v, v, curr_order, c, o, l, s );
 		v->size += next_v->size;
 
 		// add child sum
 		v->sum[next_v->id]  = next_v->total_sum;
 		// add child subtree size
 		v->sum[next_v->id] += next_v->size;
-		// remove duplicate colors
+		//// remove duplicate colors
 		uint32_t next_o = next_v->order;
 		set<uint32_t>::iterator it;
+		// Search for subtrees with root of the same color
 		while( (it = c[v->color].lower_bound( next_o )) != c[v->color].end() ) {
-			v->sum[next_v->id] -= o[*it]->size;
+			cst += o[*it]->size;
+			v->cst[next_v->id] += o[*it]->size; // Accumulate size of the subtree
+			v->sum[next_v->id] -= o[*it]->size; // Substract size of the subtree
 			next_o = o[*it]->order + o[*it]->size;
 		}
 		// update total sum
@@ -68,10 +73,11 @@ void first_step( Vertex * v, const Vertex * prev_v, uint32_t & curr_order, vecto
 	v->total_sum++; // self connection
 	c[v->color].insert( v->order ); // index v by color
 	l[v->color] = v->cv; // Restore last vertex
+	s[v->color] += v->size - cst; // Update subtree size
 }
 
 
-void second_step( Vertex * v0, const uint32_t n, vector<set<uint32_t>> & c, vector<Vertex*> & o ) {
+void bfs( Vertex * v0, const uint32_t n, vector<uint32_t> & s  ) {
 
 	queue<Vertex*> q;
 	q.push( v0 );
@@ -91,29 +97,18 @@ void second_step( Vertex * v0, const uint32_t n, vector<set<uint32_t>> & c, vect
 				v->sum[next_v->id] += n - v->size;
 				//// remove duplicate colors
 				// Find lowest ancestor with same color
-				uint32_t next_o = 0;
-				uint32_t last_o = n;
 				if( v->cv ) { // found
 					for( Vertex * next_oi: v->cv->adj ) { // search edge connecting to v
 						if(( next_oi->order > v->cv->order ) // skip parent
 						&& ( next_oi->order <= v->order ) // v->order must be in the range of next_oi->order and next_oi->order + next_oi->size
 						&& ( v->order < next_oi->order + next_oi->size) ) {
-							v->sum[next_v->id] -= n - next_oi->size;
-							next_o = next_oi->order;
-							last_o = next_oi->order + next_oi->size;
+							v->sum[next_v->id] -= n - next_oi->size; // Substract size of the remaining graph
+							v->sum[next_v->id] -= v->cv->cst[next_oi->id] - v->size; // Substract accumulated size of the subtrees with root of the same color (except current subtree)
 							break;
 						}
 					}
-				}
-				// search for duplicate colors in lowest ancestor subtree
-				set<uint32_t>::iterator it;
-				while( (it = c[v->color].lower_bound( next_o )) != c[v->color].end()
-				    && o[*it]->order < last_o ) {
-					const Vertex * oi = o[*it];
-					next_o = oi->order + oi->size;
-					if( oi == v ) // self
-						continue;
-					v->sum[next_v->id] -= oi->size;
+				} else { // Substract accumulated size of the subtrees with root of the same color (except current subtree)
+					v->sum[next_v->id] -= s[v->color] - v->size;
 				}
 				// update total sum
 				v->total_sum += v->sum[next_v->id];
@@ -131,9 +126,11 @@ void unique_colors( vector<Vertex> & v, size_t color_size ) {
 	vector<set<uint32_t>> c( color_size );
 	// last vertex in the path to root by color
 	vector<Vertex*> l( color_size, nullptr );
+	// sum of the sizes of the highest subtrees indexed by the color of the root
+	vector<uint32_t> s( color_size, 0 );
 	uint32_t order = 0;
-	first_step( &v[0], nullptr, order, c, o, l );
-	second_step( &v[0], v.size(), c, o );
+	dfs( &v[0], nullptr, order, c, o, l, s );
+	bfs( &v[0], v.size(), s );
 }
 
 // dup2 & open
