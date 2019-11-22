@@ -1,0 +1,231 @@
+/* Copyright (C) 2019 Albert Farres - All Rights Reserved
+ * You may use, distribute and modify this code under the terms of the MIT
+ * license, which unfortunately won't be written for another century.
+ *
+ * You should have received a copy of the MIT license with this file. If not,
+ * please write to: albertfc@gmail.com.
+ */
+#include <bits/stdc++.h>
+using namespace std;
+
+#include <algorithm>
+
+#include <stdio.h>
+#ifndef SOURCE_PATH_SIZE
+#define SOURCE_PATH_SIZE 0
+#endif
+#define __FILENAME__ (__FILE__ + SOURCE_PATH_SIZE)
+
+#ifdef DEBUG
+#define DBG(msg, args...) \
+	do { \
+		fprintf( stdout, "DEBUG %s:%d -- " msg, __FILENAME__, __LINE__, ##args ); \
+		fflush( stdout ); \
+	} while( 0 );
+#else
+#define DBG(msg, args...)
+#endif
+
+typedef std::vector<int> slot_t;
+typedef std::set<int> connection_t;
+typedef std::list<std::pair<int,int>> ws_sorted_list_t; // first -> ws id; sencond -> # ws connections (keep sorted by # connections)
+typedef std::vector<ws_sorted_list_t::iterator> ws_ptr_vec_t;
+
+void print_connections( const connection_t * c, const int n ) {
+	for (int i = 0; i < n; ++i) {
+		for (auto j : c[i] ) {
+			cout << j << " ";
+		}
+		cout << endl;
+	}
+}
+
+void print_connections2( const ws_sorted_list_t & list, const connection_t * c, int max ) {
+	int counter = 0;
+	for (const auto e : list) {
+		cout << e.first << " - " << e.second << " : " ;
+		//std::set<int> ordered( c[e.first].begin(), c[e.first].end() );
+		//for (const auto i : ordered) {
+		for (const auto i : c[e.first]) {
+			cout << i << " ";
+		}
+		cout << endl;
+		if( counter++ == max )
+			break;
+	}
+}
+
+
+void set_connection( ws_ptr_vec_t & ws, ws_sorted_list_t & list, connection_t * c, int i, int j ) {
+	auto res = c[i].insert(j);
+	if( ! res.second )
+		return;
+
+	// insertion took place
+
+	auto elem_it = ws[i];
+	// increment connections counter
+	(*elem_it).second += 1;
+	// move elem back to keep list sorted
+	auto curr_it = elem_it;
+	if ( curr_it == list.begin() ) 
+		return;
+	do {
+		curr_it--;
+		if( (*curr_it).second >= (*elem_it).second ) {
+			curr_it++;
+			break;
+		}
+	} while( curr_it != list.begin() );
+	if( curr_it == elem_it )
+		return;
+	auto tmp_it = list.insert( curr_it, *elem_it );
+	ws[ (*tmp_it).first ] = tmp_it;
+	list.erase( elem_it );
+}
+
+void del_front_connections( ws_ptr_vec_t & ws, ws_sorted_list_t & list, connection_t * c ) {
+	const auto & front = list.front();
+	// for each workshop id connected with front
+	for (const int i : c[ front.first ]) {
+		// remove connection with front id
+		c[i].erase( c[i].find( front.first ) );
+		// decrement connections counter
+		(*ws[i]).second -= 1;
+		// move elem forward to keep list sorted
+		auto elem_it = ws[i];
+		auto curr_it = elem_it;
+		while( ++curr_it != list.end() ) {
+			if( (*curr_it).second <= (*elem_it).second ) {
+				break;
+			}
+		}
+		if( curr_it == elem_it )
+			continue;
+		auto tmp_it = list.insert( curr_it, *elem_it );
+		ws[ (*tmp_it).first ] = tmp_it;
+		list.erase( elem_it );
+	}
+}
+
+int foo( const int * start_time, const int * duration, const int n_workshops, const int max_end_time ) {
+
+	// for each slot we keep the workshops ids in this slot
+	slot_t * slots = new slot_t[max_end_time];
+	// for each workshop (ws) we keep a set of workshops ids which this ws overlap
+	connection_t * connections = new connection_t[n_workshops];
+	// workshops sorted list by number of connections (overlaps)
+	ws_sorted_list_t ws_sorted_list(n_workshops);
+	auto ws_sorted_list_it = ws_sorted_list.begin();
+	// vector of pointers (iterators) to each element of the sorted list
+	ws_ptr_vec_t ws_ptr_vec(n_workshops);
+
+	// for each workshop
+	for (int workshop_id = 0; workshop_id < n_workshops; ++workshop_id) {
+		// set vector and list elems
+		(*ws_sorted_list_it).first = workshop_id;
+		(*ws_sorted_list_it).second = 0;
+		// increment iterator (note: it may become invalid in set_connection func!)
+		ws_ptr_vec[ workshop_id ] = ws_sorted_list_it++;
+		// for each duration slot
+		for (int slot_id = 0; slot_id < duration[ workshop_id ]; ++slot_id) {
+			// get slot for current time
+			auto & slot = slots[ start_time[ workshop_id ] + slot_id ];
+			// connect with workshops in current slot
+			for (int connection_id : slot) {
+				set_connection( ws_ptr_vec, ws_sorted_list, connections, workshop_id, connection_id );
+				set_connection( ws_ptr_vec, ws_sorted_list, connections, connection_id, workshop_id );
+			}
+			// add workshop in current slot
+			slot.push_back( workshop_id );
+		}
+		//print_connections2( ws_sorted_list, connections, workshop_id );
+		//cout << endl;
+	}
+
+	//print_connections2( ws_sorted_list, connections, n_workshops );
+	//cout << "=====================" << endl;
+
+	// check if front list is connected (i.e overlaps with another workshop)
+	while( !ws_sorted_list.empty() &&  ws_sorted_list.front().second != 0 ) {
+		del_front_connections( ws_ptr_vec, ws_sorted_list, connections );
+		ws_sorted_list.pop_front();
+		//print_connections2( ws_sorted_list, connections, n_workshops );
+		//cout << endl;
+	}
+
+	return ws_sorted_list.size();
+
+}
+
+struct Available_Workshops {
+    const int* _start_time;
+    const int* _duration;
+	const int  _n;
+	Available_Workshops( const int * s, const int * d, const int n ) : _start_time( s ), _duration( d ), _n( n ) {}
+};
+
+Available_Workshops * initialize( const int * s, const int * d, const int n ) {
+	return new Available_Workshops( s, d, n );
+}
+
+int CalculateMaxWorkshops( const Available_Workshops * aw ) {
+	int max_end_time = 0;
+	for (int i = 0; i < aw->_n; ++i) {
+		max_end_time = std::max( max_end_time, aw->_start_time[i] + aw->_duration[i] );
+	}
+
+	return foo( aw->_start_time, aw->_duration, aw->_n, max_end_time );
+}
+
+
+#if 0
+
+int main(int argc, char *argv[]) {
+    int n; // number of workshops
+    cin >> n;
+    // create arrays of unknown size n
+    int* start_time = new int[n];
+    int* duration = new int[n];
+
+    for(int i=0; i < n; i++){
+        cin >> start_time[i];
+    }
+    for(int i = 0; i < n; i++){
+        cin >> duration[i];
+    }
+
+    Available_Workshops * ptr;
+    ptr = initialize(start_time,duration, n);
+    cout << CalculateMaxWorkshops(ptr) << endl;
+    return 0;
+}
+
+#else
+
+// dup2 & open
+#include <fcntl.h>
+#include <unistd.h>
+int main( int argc, char *argv[] ) {
+	if( argc > 1 )
+		dup2(open(argv[1], 0), 0);
+
+	int n;
+	cin >> n;
+	int * start_time = new int[n];
+	int * duration = new int[n];
+	for (int i = 0; i < n; ++i) {
+		cin >> start_time[i];
+	}
+	int max_end_time = 0;
+	for (int i = 0; i < n; ++i) {
+		cin >> duration[i];
+		max_end_time = std::max( max_end_time, start_time[i] + duration[i] );
+	}
+
+	cout << foo( start_time, duration, n, max_end_time ) << endl;
+	return 0;
+}
+
+
+#endif

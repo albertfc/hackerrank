@@ -1,0 +1,9 @@
+attending-workshops.bad.cpp
+	Try to solve mapping problem to a graph. Build a sorted list of vertices by
+number of connections. Keep eliminating most connected vertex (front) until
+there is no more vertices connected.
+
+attending-workshops..cpp
+	Sort workshops by end time. Iterate this sorted vector of workshops and
+select workshops which its start time is past the last selected workshop end
+time.
