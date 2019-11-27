@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Albert Farres - All Rights Reserved
+/* Copyright (C) 2019 Albert Farres - All Rights Reserved
  * You may use, distribute and modify this code under the terms of the MIT
  * license, which unfortunately won't be written for another century.
  *

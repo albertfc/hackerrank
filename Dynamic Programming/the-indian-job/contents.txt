@@ -1,0 +1,2 @@
+the-indian-job.cpp.bad
+	Try to solve in O(n) using some greedy aproximations but ticky test cases failed.
