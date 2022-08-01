@@ -37,7 +37,6 @@ unsigned int flippingBits( unsigned int n) {
 //    }
 //    return res;
 	return n^0xFFFFFFFF;
-
 }
 
 // dup2 & open
