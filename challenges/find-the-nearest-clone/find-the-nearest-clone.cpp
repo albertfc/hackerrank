@@ -40,15 +40,13 @@ int findShortest(int graph_nodes, vector<int> graph_from, vector<int> graph_to, 
 	vector<std::unordered_set<int>> adj(graph_nodes); //adjacency list
 	vector<bool> visited( graph_nodes, false ); // visited list
 	deque<int> bfs_queue; // BFS queue
-	vector<pair<bool,deque<int>::reverse_iterator>> bfs_map(graph_nodes); // BFS map (id -> BFS queue location; bool flags iterator validity)
+	vector<int> bfs_map(graph_nodes,-1); // BFS map (id -> # of iteration pushed to queue)
 
 	// build bfs queue and map
 	for (int i = 0; i < graph_nodes; ++i) {
 		if( ids[i] == val ) {
 			bfs_queue.push_back( i );
-			bfs_map[i] = make_pair( true, bfs_queue.rbegin() );
-		} else {
-			bfs_map[i] = make_pair( false, bfs_queue.rend() );
+			bfs_map[i] = 0;
 		}
 	}
 
@@ -63,16 +61,18 @@ int findShortest(int graph_nodes, vector<int> graph_from, vector<int> graph_to, 
 	}
 
 	size_t iteration_counter = 0;
+	size_t iteration_id = 1;
 	size_t distance = 0;
 	while( !bfs_queue.empty() ) {
 		// pop front
 		auto front = bfs_queue.front();
 		bfs_queue.pop_front();
-		bfs_map[front].first = false;
+		bfs_map[front] = -1;
 		visited[front] = true;
 		if( iteration_size--  == 0 ) {
 			iteration_size = iteration_counter;
 			iteration_counter = 0;
+			iteration_id++;
 			distance += 2;
 		}
 
@@ -80,12 +80,12 @@ int findShortest(int graph_nodes, vector<int> graph_from, vector<int> graph_to, 
 		for (auto i : adj[front]) {
 			if( visited[i] )
 				continue;
-			if( ! bfs_map[i].first ) {
+			if( bfs_map[i] < 0 ) {
 				bfs_queue.push_back( i );
-				bfs_map[i] = make_pair( true, bfs_queue.rbegin() );
+				bfs_map[i] = iteration_id;
 				iteration_counter++;
 			} else { // found !
-				if( std::distance( bfs_map[i].second, bfs_queue.rbegin() )+1 < iteration_size ) {
+				if( bfs_map[i] != iteration_id ) {
 					// added in previous iteration
 					distance += 1;
 				} else {
